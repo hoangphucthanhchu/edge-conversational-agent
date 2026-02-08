@@ -1,5 +1,6 @@
 """Whisper ASR via Hugging Face Transformers. Load model, transcribe audio (file or array) to text."""
 
+import os
 from pathlib import Path
 from typing import Union
 
@@ -35,6 +36,10 @@ class WhisperASR:
         device: str = "auto",
         download_root: str | None = None,
     ):
+        import sys
+        # Reduce segfault risk on macOS when loading Transformers/PyTorch (OpenMP)
+        if sys.platform == "darwin" and "OMP_NUM_THREADS" not in os.environ:
+            os.environ["OMP_NUM_THREADS"] = "2"
         from transformers import WhisperForConditionalGeneration, WhisperProcessor
         import torch
 
@@ -44,6 +49,9 @@ class WhisperASR:
         self.model_name = model_name
         if device == "auto":
             device = "cuda" if torch.cuda.is_available() else "cpu"
+        # On macOS (darwin), prefer CPU to avoid MPS/Accelerate segfaults when loading
+        if sys.platform == "darwin" and device != "cuda":
+            device = "cpu"
         self.device = device
 
         cache_dir = str(download_root) if download_root else None

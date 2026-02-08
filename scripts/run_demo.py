@@ -12,6 +12,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
+# Reduce segfault risk when loading Whisper on macOS (OpenMP / MPS)
+if "OMP_NUM_THREADS" not in os.environ:
+    os.environ["OMP_NUM_THREADS"] = "2"
+if "PYTORCH_ENABLE_MPS_FALLBACK" not in os.environ:
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
+
 from src.latency import measure_latency
 from src.pipeline import Pipeline
 
