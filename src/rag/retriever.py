@@ -1,10 +1,10 @@
-"""RAG: ingest docs from data/rag/, chunk, embed (sentence-transformers), ChromaDB, retrieve."""
+"""RAG: ingest docs from data/rag/, chunk, embed (sentence-transformers), FAISS, retrieve."""
 
+import pickle
 from pathlib import Path
-from typing import Sequence
 
-import chromadb
-from chromadb.config import Settings
+import faiss
+import numpy as np
 from sentence_transformers import SentenceTransformer
 
 
@@ -28,12 +28,15 @@ def _chunk_text(
 
 
 class RAGRetriever:
-    """Ingest docs, embed, store in ChromaDB; retrieve top-k chunks as context string."""
+    """Ingest docs, embed, store in FAISS; retrieve top-k chunks as context string."""
+
+    INDEX_FILENAME = "index.faiss"
+    CHUNKS_FILENAME = "chunks.pkl"
 
     def __init__(
         self,
         embed_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-        persist_dir: str = "data/rag/chroma_db",
+        persist_dir: str = "data/rag/faiss_index",
         top_k: int = 3,
         chunk_size: int = 512,
         chunk_overlap: int = 64,
@@ -45,39 +48,58 @@ class RAGRetriever:
         self.chunk_overlap = chunk_overlap
         self._encoder = SentenceTransformer(embed_model)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
-        self._client = chromadb.PersistentClient(
-            path=str(self.persist_dir),
-            settings=Settings(anonymized_telemetry=False),
-        )
-        self._collection_name = "rag_docs"
-        self._collection = self._client.get_or_create_collection(
-            name=self._collection_name,
-            metadata={"hnsw:space": "cosine"},
-        )
+        self._index: faiss.IndexFlatIP | None = None
+        self._chunks: list[str] = []
+
+    def _index_path(self) -> Path:
+        return self.persist_dir / self.INDEX_FILENAME
+
+    def _chunks_path(self) -> Path:
+        return self.persist_dir / self.CHUNKS_FILENAME
+
+    def _load_index(self) -> bool:
+        """Load FAISS index and chunks from disk if present. Returns True if loaded."""
+        ip, cp = self._index_path(), self._chunks_path()
+        if not ip.exists() or not cp.exists():
+            return False
+        self._index = faiss.read_index(str(ip))
+        with open(cp, "rb") as f:
+            self._chunks = pickle.load(f)
+        return True
+
+    def _save_index(self) -> None:
+        """Save FAISS index and chunks to disk."""
+        if self._index is None or not self._chunks:
+            return
+        faiss.write_index(self._index, str(self._index_path()))
+        with open(self._chunks_path(), "wb") as f:
+            pickle.dump(self._chunks, f)
 
     def build_index(self, docs_dir: str | Path) -> int:
-        """Read .txt/.md from docs_dir, chunk, embed, add to ChromaDB. Returns num chunks."""
+        """Read .txt/.md from docs_dir, chunk, embed, add to FAISS. Returns num chunks."""
         docs_dir = Path(docs_dir)
         if not docs_dir.is_dir():
             return 0
         chunks_all: list[str] = []
-        ids_all: list[str] = []
         for path in sorted(docs_dir.rglob("*")):
             if path.suffix.lower() not in (".txt", ".md"):
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
-            chunks = _chunk_text(text, self.chunk_size, self.chunk_overlap)
-            for i, c in enumerate(chunks):
+            for c in _chunk_text(text, self.chunk_size, self.chunk_overlap):
                 chunks_all.append(c)
-                ids_all.append(f"{path.name}_{i}")
         if not chunks_all:
             return 0
-        embeddings = self._encoder.encode(chunks_all).tolist()
-        self._collection.upsert(
-            ids=ids_all,
-            documents=chunks_all,
-            embeddings=embeddings,
-        )
+        embeddings = self._encoder.encode(chunks_all, convert_to_numpy=True)
+        if not isinstance(embeddings, np.ndarray):
+            embeddings = np.array(embeddings, dtype=np.float32)
+        if embeddings.dtype != np.float32:
+            embeddings = embeddings.astype(np.float32)
+        faiss.normalize_L2(embeddings)
+        dim = embeddings.shape[1]
+        self._index = faiss.IndexFlatIP(dim)
+        self._index.add(embeddings)
+        self._chunks = chunks_all
+        self._save_index()
         return len(chunks_all)
 
     def retrieve(self, query: str, top_k: int | None = None) -> str:
@@ -85,23 +107,25 @@ class RAGRetriever:
         k = top_k if top_k is not None else self.top_k
         if not query or not query.strip():
             return ""
-        n = self._collection.count()
-        if n == 0:
+        if self._index is None and not self._load_index():
             return ""
-        q_emb = self._encoder.encode([query]).tolist()
-        results = self._collection.query(
-            query_embeddings=q_emb,
-            n_results=min(k, n),
-        )
-        docs = results.get("documents") or [[]]
-        if not docs or not docs[0]:
+        n = self._index.ntotal
+        if n == 0 or not self._chunks:
             return ""
-        return "\n\n".join(docs[0])
+        k = min(k, n)
+        q_emb = self._encoder.encode([query], convert_to_numpy=True)
+        if not isinstance(q_emb, np.ndarray):
+            q_emb = np.array(q_emb, dtype=np.float32)
+        if q_emb.dtype != np.float32:
+            q_emb = q_emb.astype(np.float32)
+        faiss.normalize_L2(q_emb)
+        _, indices = self._index.search(q_emb, k)
+        hits = [self._chunks[i] for i in indices[0] if 0 <= i < len(self._chunks)]
+        return "\n\n".join(hits) if hits else ""
 
     def clear(self) -> None:
-        """Remove all documents from the collection (for rebuild)."""
-        self._client.delete_collection(self._collection_name)
-        self._collection = self._client.get_or_create_collection(
-            name=self._collection_name,
-            metadata={"hnsw:space": "cosine"},
-        )
+        """Remove index and chunks (for rebuild)."""
+        self._index = None
+        self._chunks = []
+        self._index_path().unlink(missing_ok=True)
+        self._chunks_path().unlink(missing_ok=True)

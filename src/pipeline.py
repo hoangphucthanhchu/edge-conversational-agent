@@ -37,7 +37,7 @@ class Pipeline:
         )
         self.rag = RAGRetriever(
             embed_model=rag_cfg.get("embed_model", "sentence-transformers/all-MiniLM-L6-v2"),
-            persist_dir=rag_cfg.get("persist_dir", "data/rag/chroma_db"),
+            persist_dir=rag_cfg.get("persist_dir", "data/rag/faiss_index"),
             top_k=rag_cfg.get("top_k", 3),
             chunk_size=rag_cfg.get("chunk_size", 512),
             chunk_overlap=rag_cfg.get("chunk_overlap", 64),
