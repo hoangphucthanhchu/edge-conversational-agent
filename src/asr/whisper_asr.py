@@ -73,8 +73,11 @@ class WhisperASR:
         *,
         language: str | None = None,
         **kwargs,
-    ) -> str:
-        """Transcribe audio to text. Accepts file path or mono float32 array (16 kHz)."""
+    ) -> tuple[str, str]:
+        """
+        Transcribe audio to text. Accepts file path or mono float32 array (16 kHz).
+        Returns (text, language_code). If language is None, Whisper auto-detects; language_code is then the detected code (e.g. "vi", "en").
+        """
         import torch
 
         if isinstance(audio, (str, Path)):
@@ -111,4 +114,20 @@ class WhisperASR:
             generated_ids,
             skip_special_tokens=True,
         )[0]
-        return (text or "").strip()
+        text = (text or "").strip()
+
+        # Resolved language: forced or detected from first token (index 1 is language token)
+        if language:
+            resolved_lang = language
+        else:
+            lang_tokens = self._processor.batch_decode(
+                generated_ids[:, 1:2],
+                skip_special_tokens=False,
+            )
+            raw = (lang_tokens[0] or "").strip()
+            if raw.startswith("<|") and raw.endswith("|>"):
+                resolved_lang = raw[2:-2].strip() or "en"
+            else:
+                resolved_lang = "en"
+
+        return text, resolved_lang

@@ -31,9 +31,9 @@ class LatencyReport:
 
 
 def measure_latency(
-    run_fn: Callable[[], tuple[tuple[str, str, str, bytes], LatencyReport]],
+    run_fn: Callable[[], tuple[tuple[str, str, str, bytes, str], LatencyReport]],
     audio_duration_sec: float | None = None,
-) -> tuple[tuple[str, str, str, bytes], LatencyReport]:
+) -> tuple[tuple[str, str, str, bytes, str], LatencyReport]:
     """
     Run the pipeline via run_fn() which returns (result, report) with per-stage timings.
     Optionally set report.rtf from audio_duration_sec.

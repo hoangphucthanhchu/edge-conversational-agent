@@ -4,6 +4,7 @@
 asr:
   model_name: openai/whisper-small  # or path to models/whisper-small-vien after fine-tune
   device: auto  # auto, cpu, cuda
+  language: vi  # null or "auto" = Whisper auto-detect from audio; set e.g. "vi", "en" to force
 
 rag:
   embed_model: sentence-transformers/all-MiniLM-L6-v2
@@ -20,4 +21,5 @@ llm:
 tts:
   provider: piper
   voice: en_US-lessac-medium  # or path to .onnx + .json
+  # voice: vi_VN-vais1000-medium
   output_sample_rate: 22050

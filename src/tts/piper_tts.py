@@ -28,14 +28,31 @@ class PiperTTS:
         if p.exists():
             return str(p)
         name = voice if voice.endswith(".onnx") else f"{voice}.onnx"
+        voice_id = voice.removesuffix(".onnx") if voice.endswith(".onnx") else voice
+        project_root = Path(__file__).resolve().parent.parent.parent
         for base in [
             Path.home() / ".local" / "share" / "piper",
             Path.cwd() / "voices",
-            Path(__file__).resolve().parent.parent.parent / "voices",
+            project_root / "voices",
+            project_root,  # e.g. en_US-lessac-medium.onnx in repo root
         ]:
             candidate = base / name
             if candidate.exists():
                 return str(candidate)
+        # Try to download the voice into project voices/
+        try:
+            from piper.download_voices import download_voice
+            download_dir = project_root / "voices"
+            download_dir.mkdir(parents=True, exist_ok=True)
+            download_voice(voice_id, download_dir)
+            candidate = download_dir / name
+            if candidate.exists():
+                return str(candidate)
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Piper voice not found: {voice}. Tried to download but failed: {e}. "
+                "Install the voice manually: python -m piper.download_voices <voice_id>"
+            ) from e
         raise FileNotFoundError(
             f"Piper voice not found: {voice}. "
             "Run: python -m piper.download_voices <voice_id> and set path in config."

@@ -48,16 +48,17 @@ def main() -> None:
     pipeline = Pipeline(config_path=args.config)
     audio_duration_sec = get_audio_duration_sec(args.audio)
 
-    def run_once() -> tuple[tuple[str, str, str, bytes], object]:
+    def run_once() -> tuple[tuple[str, str, str, bytes, str], object]:
         return pipeline.run(args.audio)
 
     runs = max(1, args.runs)
     reports = []
     for i in range(runs):
         (result, report) = measure_latency(run_once, audio_duration_sec)
-        transcript, context, answer, audio_bytes = result
+        transcript, context, answer, audio_bytes, language = result
         reports.append(report)
         if i == 0:
+            print("Language:", language or "(none)")
             print("Transcript:", transcript or "(empty)")
             print("Answer:", answer or "(empty)")
             if audio_bytes:

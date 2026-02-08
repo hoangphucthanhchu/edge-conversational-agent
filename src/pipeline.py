@@ -31,6 +31,11 @@ class Pipeline:
         llm_cfg = cfg.get("llm") or {}
         tts_cfg = cfg.get("tts") or {}
 
+        # language: None or "auto" or "" => Whisper auto-detect; "vi", "en", etc. => force language
+        _lang = asr_cfg.get("language")
+        self._asr_language = None if _lang in (None, "auto", "") else str(_lang).strip() or None
+        self._current_language: str | None = None  # set after run() from config or ASR-detected
+
         self.asr = WhisperASR(
             model_name=asr_cfg.get("model_name", "base"),
             device=asr_cfg.get("device", "auto"),
@@ -54,16 +59,19 @@ class Pipeline:
             output_sample_rate=tts_cfg.get("output_sample_rate", 22050),
         )
 
-    def run(self, audio: str | Path | bytes) -> tuple[tuple[str, str, str, bytes], LatencyReport]:
+    def run(self, audio: str | Path | bytes) -> tuple[tuple[str, str, str, bytes, str], LatencyReport]:
         """
         Run pipeline: audio -> transcript -> context -> answer -> audio_bytes.
-        Returns ((transcript, context, answer, audio_bytes), LatencyReport).
+        If asr.language is null in config, Whisper auto-detects; resolved language is set and used for the rest of the flow.
+        Returns ((transcript, context, answer, audio_bytes, language), LatencyReport).
         """
         t_start = time.perf_counter()
 
         t0 = time.perf_counter()
-        transcript = self.asr.transcribe(audio)
+        transcript, language = self.asr.transcribe(audio, language=self._asr_language)
         t_asr = time.perf_counter()
+        # language from config (if forced) or Whisper-detected; use for rest of flow
+        self._current_language = language
 
         context = self.rag.retrieve(transcript)
         t_rag = time.perf_counter()
@@ -81,4 +89,4 @@ class Pipeline:
             tts_ms=(t_tts - t_llm) * 1000,
             e2e_ms=(t_tts - t_start) * 1000,
         )
-        return (transcript, context, answer, audio_bytes), report
+        return (transcript, context, answer, audio_bytes, language), report
