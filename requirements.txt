@@ -1,0 +1,23 @@
+# ASR
+openai-whisper>=20231117
+transformers>=4.36.0
+datasets>=2.16.0
+accelerate>=0.25.0
+evaluate>=0.4.0
+jiwer>=3.0.0
+
+# RAG
+sentence-transformers>=2.2.0
+chromadb>=0.4.0
+
+# LLM (Ollama client)
+ollama>=0.1.0
+
+# TTS (Piper - lightweight, offline)
+piper-tts>=1.2.0
+
+# Utilities
+pyyaml>=6.0
+soundfile>=0.12.0
+librosa>=0.10.0
+numpy>=1.24.0

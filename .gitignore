@@ -1,0 +1,74 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+.env.local
+.env.*.local
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Distribution / build
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Project-specific: models & caches
+*.pt
+*.pth
+*.bin
+*.onnx
+checkpoints/
+models/
+.cache/
+
+# ChromaDB / RAG
+chroma/
+*.db
+
+# Audio / generated data (giữ .gitkeep và file mẫu)
+data/whisper/*.wav
+data/whisper/*.mp3
+data/whisper/*.mp4
+data/whisper/manifest.csv
+!data/whisper/manifest.csv.example
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/
+*.tmp

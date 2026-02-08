@@ -1,0 +1,5 @@
+Edge Conversational Agent is a local pipeline that turns speech into answers and back into speech.
+
+The pipeline steps are: ASR (Whisper) turns audio into text. RAG retrieves relevant documents. The LLM (e.g. Ollama) generates an answer from context and the question. TTS (e.g. Piper) turns the answer into audio.
+
+You can measure end-to-end latency to simulate an edge device. Use MOCK_EDGE=1 to limit threads.

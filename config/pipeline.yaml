@@ -1,0 +1,23 @@
+# Edge Conversational Agent - Pipeline config
+# Model paths, RAG/LLM settings
+
+asr:
+  model_name: openai/whisper-small  # or path to models/whisper-small-vien after fine-tune
+  device: auto  # auto, cpu, cuda
+
+rag:
+  embed_model: sentence-transformers/all-MiniLM-L6-v2
+  persist_dir: data/rag/chroma_db
+  top_k: 3
+  chunk_size: 512
+  chunk_overlap: 64
+
+llm:
+  provider: ollama
+  model: llama3.2
+  base_url: http://localhost:11434
+
+tts:
+  provider: piper
+  voice: en_US-lessac-medium  # or path to .onnx + .json
+  output_sample_rate: 22050
