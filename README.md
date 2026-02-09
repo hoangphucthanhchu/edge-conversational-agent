@@ -58,7 +58,7 @@ Optional: `MOCK_EDGE=1 python scripts/run_demo.py audio.wav` to simulate edge (r
 
 - `config/pipeline.yaml` – model paths, RAG/LLM/TTS config
 - `src/asr/` – Whisper ASR (Hugging Face Transformers; same stack as fine-tuning)
-- `src/rag/` – RAG (ChromaDB + sentence-transformers)
+- `src/rag/` – RAG (Faiss + sentence-transformers)
 - `src/llm/` – Ollama client
 - `src/tts/` – Piper TTS
 - `src/pipeline.py` – orchestration
