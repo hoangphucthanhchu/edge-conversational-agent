@@ -166,8 +166,8 @@ def main() -> None:
         max_steps = -1
         num_train_epochs = args.num_train_epochs
         total_steps = int(steps_per_epoch * num_train_epochs)
-        # Warmup ~20% for small datasets (e.g. 382 samples -> 48 steps -> ~10 warmup)
-        warmup_ratio = 0.2
+        # Warmup ~10% for small datasets (e.g. 382 samples -> 48 steps -> ~5 warmup)
+        warmup_ratio = 0.1
         warmup_steps = 0
         save_steps = min(50, max(24, total_steps // 2))  # save at least once when total_steps < 200
         print(f"Dataset size: {n_samples}, steps/epoch: {steps_per_epoch}, total steps: {total_steps}, warmup: {warmup_ratio:.0%}, save_steps: {save_steps}")
