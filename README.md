@@ -2,6 +2,33 @@
 
 Local pipeline: **Audio → ASR (Whisper) → RAG → LLM → TTS**, with end-to-end latency measurement (mock edge).
 
+## Pipeline diagram
+
+![Pipeline: Audio → ASR → RAG → LLM → TTS](docs/pipeline-audio-asr-rag-llm-tts.png)
+
+```mermaid
+flowchart LR
+    subgraph input[" "]
+        A[🎤 Audio]
+    end
+    subgraph processing["Pipeline"]
+        B["ASR<br/>(Speech-to-Text)"]
+        C["RAG<br/>(Retrieval)"]
+        D["LLM<br/>(Language Model)"]
+        E["TTS<br/>(Text-to-Speech)"]
+    end
+    subgraph output[" "]
+        F[🔊 Audio]
+    end
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+```
+
+**Details:** [docs/pipeline-diagram.md](docs/pipeline-diagram.md) — detailed diagram, latency table, pipeline + tool calling (async).
+
 ## Setup
 
 ```bash
