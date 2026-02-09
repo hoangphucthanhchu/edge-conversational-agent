@@ -50,20 +50,53 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=3e-5)
     parser.add_argument("--dataset", type=str, default=None, help="HuggingFace dataset name (e.g. mozilla-foundation/common_voice_17_0) to use instead of manifest")
     parser.add_argument("--dataset-config", type=str, default="vi", help="Dataset config/subset (e.g. vi, en)")
+    parser.add_argument("--no-freeze-encoder", action="store_false", dest="freeze_encoder", default=True, help="Finetune full model (encoder + decoder). Default: freeze encoder, only finetune decoder.")
     args = parser.parse_args()
 
-    from datasets import Dataset, DatasetDict, Audio
+    from dataclasses import dataclass
+    import torch
+    import soundfile as sf
+    import librosa
+    from datasets import Dataset, DatasetDict
     from transformers import (
         WhisperForConditionalGeneration,
         WhisperProcessor,
         Seq2SeqTrainingArguments,
         Seq2SeqTrainer,
     )
-    from transformers import DataCollatorSpeechSeq2SeqWithPadding
     import evaluate
+
+    # DataCollatorSpeechSeq2SeqWithPadding was removed from transformers; use local implementation (from HF examples).
+    @dataclass
+    class DataCollatorSpeechSeq2SeqWithPadding:
+        """Collate batch: pad input_features and labels for Whisper seq2seq training."""
+
+        processor: "WhisperProcessor"
+        decoder_start_token_id: int
+        forward_attention_mask: bool = False
+
+        def __call__(self, features: list[dict]) -> dict[str, torch.Tensor]:
+            model_input_name = self.processor.model_input_names[0]
+            input_features = [{model_input_name: f[model_input_name]} for f in features]
+            label_features = [{"input_ids": f["labels"]} for f in features]
+            batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
+            if self.forward_attention_mask:
+                batch["attention_mask"] = torch.LongTensor([f["attention_mask"] for f in features])
+            labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
+            labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
+            if (labels[:, 0] == self.decoder_start_token_id).all().cpu().item():
+                labels = labels[:, 1:]
+            batch["labels"] = labels
+            return batch
 
     processor = WhisperProcessor.from_pretrained(args.model, language=None, task="transcribe")
     model = WhisperForConditionalGeneration.from_pretrained(args.model)
+
+    if args.freeze_encoder:
+        model.freeze_encoder()
+        model.model.encoder.gradient_checkpointing = False
+        print("Encoder frozen: only decoder will be trained.")
+        # Decoder-only: warmup and LR matter; if output is garbage try --no-freeze-encoder or --lr 1e-5
 
     if args.dataset:
         from datasets import load_dataset
@@ -82,21 +115,36 @@ def main() -> None:
             print("No rows in manifest.", file=sys.stderr)
             sys.exit(1)
         train_dataset = Dataset.from_list(rows)
-        train_dataset = train_dataset.cast_column("path", Audio(sampling_rate=16000))
-        if "path" in train_dataset.column_names:
-            train_dataset = train_dataset.rename_column("path", "audio")
+        # Keep "path" column; load audio with soundfile in prepare() to avoid torchcodec/FFmpeg.
+
+    default_language = args.dataset_config if args.dataset else "en"
 
     def prepare(batch):
-        audio = batch["audio"]
-        if isinstance(audio, dict):
-            batch["input_features"] = processor.feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"]).input_features[0]
-        else:
-            batch["input_features"] = processor.feature_extractor(batch["audio"]["array"], sampling_rate=batch["audio"]["sampling_rate"]).input_features[0]
-        batch["labels"] = processor.tokenizer(batch["sentence"]).input_ids
+        path = batch["path"]
+        array, sr = sf.read(path, dtype="float32")
+        if array.ndim > 1:
+            array = array.mean(axis=1)
+        if sr != 16000:
+            array = librosa.resample(array, orig_sr=sr, target_sr=16000)
+        batch["input_features"] = processor.feature_extractor(array, sampling_rate=16000).input_features[0]
+        # Labels MUST include the same prefix used at inference (language + task), otherwise
+        # the model is trained to predict raw text from BOS but at inference we force
+        # <|startoftranscript|><|vi|><|transcribe|><|notimestamps|> first -> distribution shift -> garbage output ("!!!!!!!").
+        lang = batch.get("language", default_language)
+        prefix_ids = [tid for (_, tid) in processor.get_decoder_prompt_ids(language=lang, task="transcribe")]
+        text_ids = processor.tokenizer(batch["sentence"], add_special_tokens=False).input_ids
+        end_id = processor.tokenizer.eos_token_id
+        if end_id is None:
+            end_id = processor.tokenizer.convert_tokens_to_ids("<|endoftext|>")
+        batch["labels"] = prefix_ids + text_ids + [end_id]
         return batch
 
     train_dataset = train_dataset.map(prepare, remove_columns=train_dataset.column_names, num_proc=1)
-    data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=processor)
+    data_collator = DataCollatorSpeechSeq2SeqWithPadding(
+        processor=processor,
+        decoder_start_token_id=model.config.decoder_start_token_id,
+        forward_attention_mask=False,
+    )
     metric = evaluate.load("wer")
 
     def compute_metrics(pred):
@@ -107,12 +155,16 @@ def main() -> None:
         label_str = processor.batch_decode(label_ids, skip_special_tokens=True)
         return {"wer": metric.compute(predictions=pred_str, references=label_str)}
 
+    # Warmup: use ratio so we don't spend 100% of steps in warmup when max_steps is small
+    warmup_steps = min(50, max(1, int(0.1 * args.max_steps)))
+
     training_args = Seq2SeqTrainingArguments(
         output_dir=str(args.output_dir),
         per_device_train_batch_size=args.batch_size,
         learning_rate=args.lr,
         max_steps=args.max_steps,
-        warmup_steps=50,
+        warmup_steps=warmup_steps,
+        weight_decay=0.01,
         fp16=True,
         report_to="none",
         save_strategy="steps",
@@ -125,7 +177,7 @@ def main() -> None:
         train_dataset=train_dataset,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
-        tokenizer=processor.feature_extractor,
+        processing_class=processor,
     )
     processor.save_pretrained(args.output_dir)
     trainer.train()

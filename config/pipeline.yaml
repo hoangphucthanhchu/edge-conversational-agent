@@ -2,7 +2,8 @@
 # Model paths, RAG/LLM settings
 
 asr:
-  model_name: openai/whisper-small  # or path to models/whisper-small-vien after fine-tune
+  # model_name: models/whisper-small-vien  # or path to models/whisper-small-vien after fine-tune
+  model_name: openai/whisper-small
   device: auto  # auto, cpu, cuda
   language: vi  # null or "auto" = Whisper auto-detect from audio; set e.g. "vi", "en" to force
 

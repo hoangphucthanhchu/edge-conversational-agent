@@ -96,18 +96,17 @@ class WhisperASR:
         if self.device == "cuda":
             input_features = input_features.half()
 
-        forced_decoder_ids = None
+        # Use language/task in generate() so decoder context matches training (labels with
+        # prefix after strip). Do not use forced_decoder_ids for fine-tuned models.
+        gen_kwargs = dict(**kwargs)
         if language:
-            forced_decoder_ids = self._processor.get_decoder_prompt_ids(
-                language=language,
-                task="transcribe",
-            )
+            gen_kwargs["language"] = language
+            gen_kwargs["task"] = "transcribe"
 
         with torch.no_grad():
             generated_ids = self._model.generate(
                 input_features,
-                forced_decoder_ids=forced_decoder_ids,
-                **kwargs,
+                **gen_kwargs,
             )
 
         text = self._processor.batch_decode(
