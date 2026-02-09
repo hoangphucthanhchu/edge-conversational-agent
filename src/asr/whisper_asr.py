@@ -123,8 +123,9 @@ class WhisperASR:
             gen_kwargs["task"] = "transcribe"
 
         with torch.no_grad():
+            # PEFT wrapper expects input as keyword; base Whisper accepts positional input_features
             generated_ids = self._model.generate(
-                input_features,
+                input_features=input_features,
                 **gen_kwargs,
             )
 
