@@ -3,6 +3,7 @@
 Local pipeline: **Audio → ASR (Whisper) → RAG → LLM → TTS**, with end-to-end latency measurement (mock edge).
 
 ## Pipeline diagram
+### Overview
 
 ![Pipeline: Audio → ASR → RAG → LLM → TTS](docs/pipeline-audio-asr-rag-llm-tts.png)
 
@@ -26,6 +27,31 @@ flowchart LR
     D --> E
     E --> F
 ```
+
+### RAG systems for real-time information retrieval (News, Websearch, Weather) with LLM reasoning 
+
+```mermaid
+flowchart LR
+    A[Audio] --> B["ASR<br/>(Whisper)"]
+    B --> L1["LLM<br/>(reasoning + routing)"]
+    L1 --> R["RAG<br/>(FAISS – static knowledge)"]
+    L1 --> T["Tool<br/>(News / Weather / Web)"]
+    R --> L2["LLM<br/>(compose answer)"]
+    T --> L2
+    L2 --> E["TTS<br/>(Piper)"]
+    E --> F[Audio out]
+
+    style B fill:#e1f5fe
+    style L1 fill:#fff3e0
+    style R fill:#e8f5e9
+    style T fill:#f3e5f5
+    style L2 fill:#fff3e0
+    style E fill:#fce4ec
+```
+
+**Note**:
+The diagram represents the intended production architecture.
+The current implementation focuses on validating the core data flow and model interactions; asynchronous tool execution and fallback strategies are documented but not fully implemented in code.
 
 **Details:** [docs/pipeline-diagram.md](docs/pipeline-diagram.md) — detailed diagram, latency table, pipeline + tool calling (async).
 
