@@ -54,8 +54,10 @@ class Pipeline:
             model=llm_cfg.get("model", "llama3.2"),
             base_url=llm_cfg.get("base_url", "http://localhost:11434"),
         )
+        self._tts_default_voice = tts_cfg.get("voice", "en_US-lessac-medium")
+        self._tts_voices_by_language = tts_cfg.get("voices_by_language") or {}
         self.tts = PiperTTS(
-            voice=tts_cfg.get("voice", "en_US-lessac-medium"),
+            voice=self._tts_default_voice,
             output_sample_rate=tts_cfg.get("output_sample_rate", 22050),
         )
 
@@ -78,6 +80,13 @@ class Pipeline:
 
         answer = self.llm.generate(query=transcript, context=context)
         t_llm = time.perf_counter()
+
+        # Chọn TTS voice theo ngôn ngữ ASR
+        voice = self._tts_voices_by_language.get(language) if language else None
+        if voice:
+            self.tts.set_voice(voice)
+        else:
+            self.tts.set_voice(self._tts_default_voice)
 
         audio_bytes = self.tts.synthesize(answer) if answer.strip() else b""
         t_tts = time.perf_counter()

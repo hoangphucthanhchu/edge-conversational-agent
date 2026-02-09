@@ -20,8 +20,14 @@ class PiperTTS:
                or voice id for default cache (e.g. en_US-lessac-medium).
         """
         self.output_sample_rate = output_sample_rate
+        self._use_cuda = use_cuda
         self._voice_path = self._resolve_voice(voice)
         self._voice = PiperVoice.load(self._voice_path, use_cuda=use_cuda)
+
+    def set_voice(self, voice: str) -> None:
+        """Switch to another voice (e.g. by ASR language)."""
+        self._voice_path = self._resolve_voice(voice)
+        self._voice = PiperVoice.load(self._voice_path, use_cuda=self._use_cuda)
 
     def _resolve_voice(self, voice: str) -> str:
         p = Path(voice)

@@ -23,7 +23,7 @@ class OllamaClient:
     ) -> str:
         """Generate answer from context and query. Returns only the answer text."""
         system = system_prompt or (
-            "Answer briefly based only on the context below. "
+            "Answer briefly with the same language as the question, based only on the context below. "
             "If the context does not contain the answer, say you don't know."
         )
         user = ""
