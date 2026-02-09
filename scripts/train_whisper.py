@@ -45,7 +45,8 @@ def main() -> None:
     parser.add_argument("--data-dir", type=Path, default=PROJECT_ROOT / "data" / "whisper", help="Base dir for relative paths in manifest")
     parser.add_argument("--model", type=str, default="openai/whisper-small", help="Base Whisper model")
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "models" / "whisper-small-vien", help="Save checkpoint here")
-    parser.add_argument("--max-steps", type=int, default=500, help="Training steps (small demo)")
+    parser.add_argument("--max-steps", type=int, default=None, help="Training steps (ignored if --num_train_epochs is set)")
+    parser.add_argument("--num-train-epochs", type=float, default=None, help="Number of epochs (e.g. 1 or 2). When set, max_steps is ignored.")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=3e-5)
     parser.add_argument("--dataset", type=str, default=None, help="HuggingFace dataset name (e.g. mozilla-foundation/common_voice_17_0) to use instead of manifest")
@@ -97,6 +98,9 @@ def main() -> None:
         model.model.encoder.gradient_checkpointing = False
         print("Encoder frozen: only decoder will be trained.")
         # Decoder-only: warmup and LR matter; if output is garbage try --no-freeze-encoder or --lr 1e-5
+    else:
+        model.gradient_checkpointing_enable()
+        print("Encoder trainable; gradient checkpointing enabled to reduce memory.")
 
     if args.dataset:
         from datasets import load_dataset
@@ -155,20 +159,39 @@ def main() -> None:
         label_str = processor.batch_decode(label_ids, skip_special_tokens=True)
         return {"wer": metric.compute(predictions=pred_str, references=label_str)}
 
-    # Warmup: use ratio so we don't spend 100% of steps in warmup when max_steps is small
-    warmup_steps = min(50, max(1, int(0.1 * args.max_steps)))
+    use_epochs = args.num_train_epochs is not None
+    n_samples = len(train_dataset)
+    steps_per_epoch = (n_samples + args.batch_size - 1) // args.batch_size
+    if use_epochs:
+        max_steps = -1
+        num_train_epochs = args.num_train_epochs
+        total_steps = int(steps_per_epoch * num_train_epochs)
+        # Warmup ~20% for small datasets (e.g. 382 samples -> 48 steps -> ~10 warmup)
+        warmup_ratio = 0.2
+        warmup_steps = 0
+        save_steps = min(50, max(24, total_steps // 2))  # save at least once when total_steps < 200
+        print(f"Dataset size: {n_samples}, steps/epoch: {steps_per_epoch}, total steps: {total_steps}, warmup: {warmup_ratio:.0%}, save_steps: {save_steps}")
+    else:
+        max_steps = args.max_steps if args.max_steps is not None else 500
+        num_train_epochs = 1.0  # unused when max_steps > 0
+        total_steps = max_steps
+        warmup_ratio = 0.0
+        warmup_steps = min(50, max(1, int(0.1 * max_steps)))
+        save_steps = 200
 
     training_args = Seq2SeqTrainingArguments(
         output_dir=str(args.output_dir),
         per_device_train_batch_size=args.batch_size,
         learning_rate=args.lr,
-        max_steps=args.max_steps,
+        max_steps=max_steps,
+        num_train_epochs=num_train_epochs,
         warmup_steps=warmup_steps,
+        warmup_ratio=warmup_ratio,
         weight_decay=0.01,
         fp16=True,
         report_to="none",
         save_strategy="steps",
-        save_steps=200,
+        save_steps=save_steps,
         save_total_limit=1,
     )
     trainer = Seq2SeqTrainer(
