@@ -39,7 +39,7 @@ class WhisperASR:
         import sys
         # Reduce segfault risk on macOS when loading Transformers/PyTorch (OpenMP)
         if sys.platform == "darwin" and "OMP_NUM_THREADS" not in os.environ:
-            os.environ["OMP_NUM_THREADS"] = "2"
+            os.environ["OMP_NUM_THREADS"] = "1"
         from transformers import WhisperForConditionalGeneration, WhisperProcessor
         import torch
 

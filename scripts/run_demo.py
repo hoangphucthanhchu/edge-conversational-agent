@@ -14,7 +14,7 @@ os.chdir(PROJECT_ROOT)
 
 # Reduce segfault risk when loading Whisper on macOS (OpenMP / MPS)
 if "OMP_NUM_THREADS" not in os.environ:
-    os.environ["OMP_NUM_THREADS"] = "2"
+    os.environ["OMP_NUM_THREADS"] = "1"
 if "PYTORCH_ENABLE_MPS_FALLBACK" not in os.environ:
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "0"
 
@@ -43,7 +43,7 @@ def main() -> None:
         sys.exit(1)
 
     if os.environ.get("MOCK_EDGE") == "1":
-        os.environ["OMP_NUM_THREADS"] = os.environ.get("OMP_NUM_THREADS", "2")
+        os.environ["OMP_NUM_THREADS"] = os.environ.get("OMP_NUM_THREADS", "1")
 
     pipeline = Pipeline(config_path=args.config)
     audio_duration_sec = get_audio_duration_sec(args.audio)
