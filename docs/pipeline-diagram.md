@@ -60,7 +60,8 @@ python scripts/run_demo.py data/whisper/clips/VIVOSSPK12_R011.wav
 
 **Formula:** `e2e_ms = asr_ms + rag_ms + llm_ms + tts_ms` (+ overhead). RTF < 1 = response faster than audio duration.
 
-## Pipeline + Tool calling (async)
+## Best practices (design only)
+RAG systems for real-time information retrieval (News, Websearch, Weather) with LLM reasoning
 
 Flow: ASR → **LLM (reasoning + routing)** decides whether to call **Tool (News / Weather / Web)** and/or **RAG (FAISS – static knowledge)** or neither; results go back to the same **LLM (compose answer)** to produce the final reply, then TTS.
 
