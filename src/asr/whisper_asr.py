@@ -55,14 +55,33 @@ class WhisperASR:
         self.device = device
 
         cache_dir = str(download_root) if download_root else None
-        self._processor = WhisperProcessor.from_pretrained(
-            model_name,
-            cache_dir=cache_dir,
-        )
-        self._model = WhisperForConditionalGeneration.from_pretrained(
-            model_name,
-            cache_dir=cache_dir,
-        )
+        model_path = Path(model_name)
+        is_lora_dir = model_path.is_dir() and (model_path / "adapter_config.json").exists()
+
+        if is_lora_dir:
+            from peft import PeftModel
+            import json
+            with open(model_path / "adapter_config.json", encoding="utf-8") as f:
+                adapter_cfg = json.load(f)
+            base_name = adapter_cfg.get("base_model_name_or_path", "openai/whisper-small")
+            self._processor = WhisperProcessor.from_pretrained(
+                str(model_path),
+                cache_dir=cache_dir,
+            )
+            self._model = WhisperForConditionalGeneration.from_pretrained(
+                base_name,
+                cache_dir=cache_dir,
+            )
+            self._model = PeftModel.from_pretrained(self._model, str(model_path))
+        else:
+            self._processor = WhisperProcessor.from_pretrained(
+                model_name,
+                cache_dir=cache_dir,
+            )
+            self._model = WhisperForConditionalGeneration.from_pretrained(
+                model_name,
+                cache_dir=cache_dir,
+            )
         self._model.to(self.device)
         if self.device == "cuda":
             self._model = self._model.half()
@@ -104,8 +123,9 @@ class WhisperASR:
             gen_kwargs["task"] = "transcribe"
 
         with torch.no_grad():
+            # PEFT wrapper expects input as keyword; base Whisper accepts positional input_features
             generated_ids = self._model.generate(
-                input_features,
+                input_features=input_features,
                 **gen_kwargs,
             )
 

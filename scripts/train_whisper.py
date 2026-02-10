@@ -52,6 +52,11 @@ def main() -> None:
     parser.add_argument("--dataset", type=str, default=None, help="HuggingFace dataset name (e.g. mozilla-foundation/common_voice_17_0) to use instead of manifest")
     parser.add_argument("--dataset-config", type=str, default="vi", help="Dataset config/subset (e.g. vi, en)")
     parser.add_argument("--no-freeze-encoder", action="store_false", dest="freeze_encoder", default=True, help="Finetune full model (encoder + decoder). Default: freeze encoder, only finetune decoder.")
+    parser.add_argument("--lora", action="store_true", help="Use LoRA (PEFT) instead of full finetune. Good for small datasets.")
+    parser.add_argument("--lora-r", type=int, default=16, help="LoRA rank (default 16)")
+    parser.add_argument("--lora-alpha", type=int, default=32, help="LoRA alpha scaling (default 32)")
+    parser.add_argument("--lora-dropout", type=float, default=0.05, help="LoRA dropout (default 0.05)")
+    parser.add_argument("--lora-target", type=str, default="both", choices=("encoder", "decoder", "both"), help="Apply LoRA to encoder, decoder, or both (default both)")
     args = parser.parse_args()
 
     from dataclasses import dataclass
@@ -66,6 +71,8 @@ def main() -> None:
         Seq2SeqTrainer,
     )
     import evaluate
+    if args.lora:
+        from peft import LoraConfig, get_peft_model, TaskType
 
     # DataCollatorSpeechSeq2SeqWithPadding was removed from transformers; use local implementation (from HF examples).
     @dataclass
@@ -93,7 +100,31 @@ def main() -> None:
     processor = WhisperProcessor.from_pretrained(args.model, language=None, task="transcribe")
     model = WhisperForConditionalGeneration.from_pretrained(args.model)
 
-    if args.freeze_encoder:
+    if args.lora:
+        # LoRA: only train low-rank adapters; base weights stay frozen (good for small datasets).
+        lora_config = LoraConfig(
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            target_modules=["q_proj", "v_proj"],
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type=TaskType.SEQ_2_SEQ_LM,
+        )
+        model = get_peft_model(model, lora_config)
+        model.gradient_checkpointing_enable()
+        if args.lora_target == "encoder":
+            for p in model.model.decoder.parameters():
+                p.requires_grad = False
+            print("LoRA enabled (encoder only); decoder frozen.")
+        elif args.lora_target == "decoder":
+            model.freeze_encoder()
+            print("LoRA enabled (decoder only); encoder frozen.")
+        else:
+            print("LoRA enabled (encoder + decoder).")
+        trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        total = sum(p.numel() for p in model.parameters())
+        print(f"Trainable params: {trainable:,} / {total:,} ({100 * trainable / total:.1f}%)")
+    elif args.freeze_encoder:
         model.freeze_encoder()
         model.model.encoder.gradient_checkpointing = False
         print("Encoder frozen: only decoder will be trained.")
@@ -103,7 +134,7 @@ def main() -> None:
         print("Encoder trainable; gradient checkpointing enabled to reduce memory.")
 
     if args.dataset:
-        from datasets import load_dataset
+        from datasets import load_dataset, Audio
         common_voice = load_dataset(args.dataset, args.dataset_config, split="train+validation", trust_remote_code=True)
         if "sentence" not in common_voice.column_names and "text" in common_voice.column_names:
             common_voice = common_voice.rename_column("text", "sentence")

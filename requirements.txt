@@ -1,6 +1,7 @@
 # ASR (train + inference via Hugging Face Transformers)
 transformers>=4.36.0
 torch>=2.0.0
+peft>=0.7.0
 # torchcodec optional; needs FFmpeg. train_whisper uses soundfile for WAV to avoid it.
 datasets>=2.16.0
 accelerate>=0.25.0
