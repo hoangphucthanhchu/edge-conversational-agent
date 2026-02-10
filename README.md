@@ -158,3 +158,7 @@ After training, set `config/pipeline.yaml` → `asr.model_name` to your saved mo
 - `src/latency.py` – per-stage and E2E latency
 - `scripts/run_demo.py` – demo + latency report
 - `scripts/train_whisper.py` – Whisper fine-tuning (VN+EN); inference uses same HF checkpoint
+
+## License
+This project is licensed under the Apache License 2.0.<br>
+See the [LICENSE](LICENSE) file for details.
