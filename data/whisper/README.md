@@ -35,9 +35,10 @@ If using [VIVOS](https://www.kaggle.com/datasets/kynthesis/vivos-vietnamese-spee
    python scripts/train_whisper.py \
      --manifest data/whisper/vivos_subset_manifest.csv \
      --num-train-epochs 2 \
+     --lr 1e-5 \
      --output-dir models/whisper-small-vivos
    ```
-   By default the encoder is frozen (only the decoder is trained). Omit `--num-train-epochs` and use `--max-steps` if you want to train by step count.
+   By default the encoder is frozen (only the decoder is trained). `--lr` is learning rate (default 3e-5). Omit `--num-train-epochs` and use `--max-steps` if you want to train by step count.
 
 ## Audio
 
