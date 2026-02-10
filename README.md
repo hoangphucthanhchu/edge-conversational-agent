@@ -138,8 +138,7 @@ If using [VIVOS](https://www.kaggle.com/datasets/kynthesis/vivos-vietnamese-spee
      --lr 1e-5 \
      --output-dir models/whisper-small-vivos
    ```
-   `--lr`: learning rate (default 3e-5).
-   By default the encoder is frozen (only the decoder is trained). Omit `--num-train-epochs` and use `--max-steps` if you want to train by step count.
+   By default the encoder is frozen (only the decoder is trained). `--lr` is learning rate (default 3e-5). Omit `--num-train-epochs` and use `--max-steps` if you want to train by step count.
 
 ### Audio
 
